@@ -1,4 +1,5 @@
 # event-bus
+[![Run Tests](https://github.com/hvuhsg/event-bus/actions/workflows/test.yml/badge.svg)](https://github.com/hvuhsg/event-bus/actions/workflows/test.yml)  
 EventBus implementation in python
 
 
