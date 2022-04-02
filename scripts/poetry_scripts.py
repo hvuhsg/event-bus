@@ -21,24 +21,40 @@ def seperator(func):
 
 @seperator
 def run_black():
-    subprocess.run(["black", "event_bus", "tests", "scripts"], cwd=root_path)
+    exit_code = subprocess.run(
+        ["black", "event_bus", "tests", "scripts"], cwd=root_path
+    ).returncode
+    return exit_code
+
+
+@seperator
+def run_flake8():
+    exit_code = subprocess.run(
+        ["flake8", "event_bus", "--max-line-length", "120"], cwd=root_path
+    ).returncode
+    return exit_code
 
 
 @seperator
 def run_mypy():
-    subprocess.run(["mypy", "event_bus"], cwd=root_path)
+    exit_code = subprocess.run(["mypy", "event_bus"], cwd=root_path).returncode
+    return exit_code
 
 
 @seperator
 def run_pytest():
-    subprocess.run(["pytest", "."], cwd=root_path)
+    exit_code = subprocess.run(["pytest", "."], cwd=root_path).returncode
+    return exit_code
 
 
 def run_all_tests():
-    run_pytest()
-    run_mypy()
+    exit_code = run_pytest()
+    exit_code |= run_mypy()
+    exit_code |= run_flake8()
+    return exit_code
 
 
 def run_all():
-    run_all_tests()
-    run_black()
+    exit_code = run_all_tests()
+    exit_code |= run_black()
+    return exit_code

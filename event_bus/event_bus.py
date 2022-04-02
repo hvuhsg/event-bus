@@ -1,6 +1,6 @@
 from threading import Event as Locker
 from asyncio import Event as AsyncLocker
-from typing import Dict, List, Optional, Set, Union, Any, Coroutine
+from typing import Dict, List, Optional, Set, Union, Any
 from collections import defaultdict
 from datetime import datetime
 from bisect import bisect_right
@@ -29,7 +29,7 @@ class EventBus:
             jsonschema.validate({}, schema)
         except jsonschema.SchemaError as e:
             raise InvalidEventSchemaException() from e
-        except jsonschema.ValidationError as e:
+        except jsonschema.ValidationError:
             pass
 
         self.queues_schemas[event_name] = schema

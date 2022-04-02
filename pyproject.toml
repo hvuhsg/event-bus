@@ -13,6 +13,7 @@ pytest = "^7.1.1"
 mypy = "^0.942"
 black = "^22.3.*"
 pytest-asyncio = "^0.18.3"
+flake8 = "^4.0.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -28,5 +29,6 @@ asyncio_mode = "auto"
 test = 'scripts.poetry_scripts:run_all_tests'
 run_pytest = 'scripts.poetry_scripts:run_pytest'
 run_mypy = 'scripts.poetry_scripts:run_mypy'
+run_flake8 = 'scripts.poetry_scripts:run_flake8'
 run_black = 'scripts.poetry_scripts:run_black'
 all = 'scripts.poetry_scripts:run_all'
