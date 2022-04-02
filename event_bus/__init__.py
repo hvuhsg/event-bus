@@ -1,1 +1,2 @@
-from .event_bus import EventBus
+from .event_bus import EventBus, AsyncEventBus
+from .consumer import Consumer, AsyncConsumer

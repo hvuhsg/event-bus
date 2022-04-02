@@ -2,25 +2,43 @@
 EventBus implementation in python
 
 
-### Example
+### Examples
+#### sync
 ```python
-from event_bus import EventBus
+from event_bus import EventBus, Consumer
 
 eb = EventBus()
+consumer = Consumer(eb)
 
 eb.dispatch("event-name", payload={"num": 1})
 
-eb.subscribe_to("event-name")
+consumer.subscribe_to("event-name")
 
-event = eb.get()
+event = consumer.get()  # Blocking
 
 print(event.payload) # -> {"num": 1}
 ```
-
+#### async
 ```python
-from event_bus import EventBus
+from event_bus import AsyncEventBus, AsyncConsumer
+
+eb = AsyncEventBus()
+consumer = AsyncConsumer(eb)
+
+eb.dispatch("event-name", payload={"num": 1})
+
+consumer.subscribe_to("event-name")
+
+event = await consumer.get()
+
+print(event.payload) # -> {"num": 1}
+```
+#### register event schema
+```python
+from event_bus import EventBus, Consumer
 
 eb = EventBus()
+consumer = Consumer(eb)
 
 # Enforce json schema of event
 json_schema = {
@@ -31,9 +49,9 @@ eb.register_event_schema("event-name", schema=json_schema)
 
 eb.dispatch("event-name", payload={"num": "7854"})
 
-eb.subscribe_to("event-name")
+consumer.subscribe_to("event-name")
 
-event = eb.get()
+event = consumer.get()  # Blocking
 
 print(event.payload) # -> {"num": "7854"}
 ```

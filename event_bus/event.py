@@ -3,8 +3,8 @@ from datetime import datetime
 
 
 class Event:
-    def __init__(self, name: str, payload: dict, dispatched_at: datetime):
-        self.name = name
+    def __init__(self, topic: str, payload: dict, dispatched_at: datetime):
+        self.topic = topic
         self.payload = payload
         self.dispatched_at = dispatched_at
 

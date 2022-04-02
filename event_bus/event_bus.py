@@ -1,5 +1,6 @@
-from typing import Dict, List, Optional, Set, Union
-from dataclasses import dataclass
+from threading import Event as Locker
+from asyncio import Event as AsyncLocker
+from typing import Dict, List, Optional, Set, Union, Any, Coroutine
 from collections import defaultdict
 from datetime import datetime
 from bisect import bisect_right
@@ -9,22 +10,19 @@ import jsonschema
 from .event import Event
 from .exceptions import InvalidEventSchemaException
 from .exceptions import InvalidPayloadException
-
-
-@dataclass
-class ConsumeConfig:
-    offset: Union[int, None] = 0
-    from_date: Optional[datetime] = None
+from .consume_config import ConsumeConfig
+from .multi_lock import MultiLock, AsyncMultiLock
 
 
 class EventBus:
+    LockerClass: type = Locker
+    MultiLockClass: type = MultiLock
+
     def __init__(self):
         self.queues: Dict[str, List[Event]] = defaultdict(list)
         self.subscribe_queues: Set[str] = set()
-        self.queues_consume_config: Dict[str, ConsumeConfig] = defaultdict(
-            ConsumeConfig
-        )
         self.queues_schemas: Dict[str, dict] = {}
+        self.queue_locks: Dict[str, Any] = defaultdict(self.LockerClass)
 
     def register_event_schema(self, event_name, /, *, schema: dict):
         try:
@@ -36,66 +34,124 @@ class EventBus:
 
         self.queues_schemas[event_name] = schema
 
-    def dispatch(self, event_name: str, /, *, payload: dict) -> datetime:
-        if schema := self.queues_schemas.get(event_name):
+    def dispatch(self, topic: str, /, *, payload: dict) -> datetime:
+        if schema := self.queues_schemas.get(topic):
             try:
                 jsonschema.validate(instance=payload, schema=schema)
             except jsonschema.ValidationError as e:
                 raise InvalidPayloadException() from e
 
         dispatch_time = datetime.now()
-        event = Event(name=event_name, payload=payload, dispatched_at=dispatch_time)
-        self.queues[event_name].append(event)
+        event = Event(topic=topic, payload=payload, dispatched_at=dispatch_time)
+        self.queues[topic].append(event)
+
+        self.queue_locks[topic].set()
+        del self.queue_locks[topic]
+
         return dispatch_time
 
-    def get(self) -> Union[Event, None]:
-        for event_name in self.subscribe_queues:
-            consume_config = self.queues_consume_config[event_name]
-            queue = self.queues[event_name]
+    def _get(
+        self, topics, topics_config: Dict[str, ConsumeConfig]
+    ) -> Union[Event, None]:
+        for topic in topics:
+            queue = self.queues[topic]
+            config = topics_config[topic]
 
             if not queue:
                 continue
 
-            if consume_config.offset is None and consume_config.from_date:
-                if queue[-1].dispatched_at >= consume_config.from_date:
-                    consume_config.offset = len(queue) - 1
-                    offset = consume_config.offset
+            if config.offset is None and config.from_date is not None:
+                config.offset = self._calculate_offset_from_date(
+                    topic, config.from_date
+                )
+
+            if config.offset is None and config.from_date:
+                if queue[-1].dispatched_at >= config.from_date:
+                    config.offset = len(queue) - 1
+                    offset = config.offset
                 else:
                     continue
-            elif consume_config.offset is not None:
-                offset = consume_config.offset
+            elif config.offset is not None:
+                offset = config.offset
             else:
                 continue
 
             if len(queue) <= offset:
                 continue
 
-            consume_config.offset += 1
+            config.offset += 1
 
             return queue[offset]
 
         return None
 
-    def subscribe_to(
-        self, event_name, /, *, offset: Optional[int] = 0, from_date: datetime = None
-    ):
-        if offset and from_date is not None:
-            raise ValueError("Can't pass offset AND from_date")
+    def get(self, topics, topics_config: Dict[str, ConsumeConfig]):
+        if (event := self._get(topics, topics_config)) is not None:
+            return event
 
-        if from_date is not None:
-            offset = self._calculate_offset_from_date(event_name, from_date)
+        locks = [self.queue_locks[topic] for topic in topics]
+        or_event = MultiLock(*locks)
+        or_event.wait()
 
-        consume_config = ConsumeConfig(offset=offset, from_date=from_date)
-        self.queues_consume_config[event_name] = consume_config
-        self.subscribe_queues.add(event_name)
+        return self.get(topics, topics_config)
 
     def _calculate_offset_from_date(
-        self, event_name: str, from_date: datetime
+        self, topic: str, /, from_date: datetime
     ) -> Optional[int]:
-        queue = self.queues[event_name]
+        queue = self.queues[topic]
         i = bisect_right(queue, from_date)
 
         if i == len(queue):
             return None
 
         return i
+
+
+class AsyncEventBus(EventBus):
+    LockerClass = AsyncLocker
+    MultiLockClass = AsyncMultiLock
+
+    def _get(
+        self, topics, topics_config: Dict[str, ConsumeConfig]
+    ) -> Union[Event, None]:
+        for topic in topics:
+            queue = self.queues[topic]
+            config = topics_config[topic]
+
+            if not queue:
+                continue
+
+            if config.offset is None and config.from_date is not None:
+                config.offset = self._calculate_offset_from_date(
+                    topic, config.from_date
+                )
+
+            if config.offset is None and config.from_date:
+                if queue[-1].dispatched_at >= config.from_date:
+                    config.offset = len(queue) - 1
+                    offset = config.offset
+                else:
+                    continue
+            elif config.offset is not None:
+                offset = config.offset
+            else:
+                continue
+
+            if len(queue) <= offset:
+                continue
+
+            config.offset += 1
+
+            return queue[offset]
+
+        return None
+
+    async def get(self, topics, topics_config: Dict[str, ConsumeConfig]):
+        if (event := self._get(topics, topics_config)) is not None:
+            return event
+
+        locks = [self.queue_locks[topic] for topic in topics]
+        or_event = AsyncMultiLock(*locks)
+        await or_event.wait()
+
+        return await self.get(topics, topics_config)
