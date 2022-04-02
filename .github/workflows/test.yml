@@ -33,7 +33,7 @@ jobs:
         poetry run pytest .
     - name: Lint
       run: |
-        poetry run flake8 event_bus --max-line-length=120
+        poetry run flake8 multi_event_bus --max-line-length=120
     - name: MyPy
       run : |
-        poetry run mypy event_bus
+        poetry run mypy multi_event_bus
