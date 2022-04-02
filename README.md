@@ -55,3 +55,21 @@ event = consumer.get()  # Blocking
 
 print(event.payload) # -> {"num": "7854"}
 ```
+
+### Development
+#### scripts
+```commandline
+poetry run run_pytest
+poetry run run_flake8
+poetry run run_mypy
+poetry run run_black
+```
+#### run tests
+```commandline
+poetry run test
+```
+
+#### run all (test and black)
+```commandline
+poetry run all
+```
