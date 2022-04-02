@@ -3,8 +3,8 @@ from datetime import timedelta, datetime
 
 import pytest
 
-from event_bus import AsyncEventBus
-from event_bus import AsyncConsumer
+from multi_event_bus import AsyncEventBus
+from multi_event_bus import AsyncConsumer
 
 
 @pytest.fixture(scope="function")

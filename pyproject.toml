@@ -1,8 +1,23 @@
 [tool.poetry]
-name = "event_bus"
-version = "0.1.0"
-description = ""
-authors = ["yehoyada"]
+name = "multi_event_bus"
+version = "0.1.1"
+description = "event bus implementation in python with sync and async support"
+authors = ["yehoyada <hvuhsg5@gmail.com>"]
+readme = "README.md"
+homepage = "https://github.com/hvuhsg/event-bus"
+repository = "https://github.com/hvuhsg/event-bus"
+keywords = ["event", "bus", "event-bus", "event_bus", "async", "blocking"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"

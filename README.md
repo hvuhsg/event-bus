@@ -5,8 +5,9 @@ EventBus implementation in python
 
 ### Examples
 #### sync
+
 ```python
-from event_bus import EventBus, Consumer
+from multi_event_bus import EventBus, Consumer
 
 eb = EventBus()
 consumer = Consumer(eb)
@@ -17,11 +18,12 @@ consumer.subscribe_to("event-name")
 
 event = consumer.get()  # Blocking
 
-print(event.payload) # -> {"num": 1}
+print(event.payload)  # -> {"num": 1}
 ```
 #### async
+
 ```python
-from event_bus import AsyncEventBus, AsyncConsumer
+from multi_event_bus import AsyncEventBus, AsyncConsumer
 
 eb = AsyncEventBus()
 consumer = AsyncConsumer(eb)
@@ -32,11 +34,12 @@ consumer.subscribe_to("event-name")
 
 event = await consumer.get()
 
-print(event.payload) # -> {"num": 1}
+print(event.payload)  # -> {"num": 1}
 ```
 #### register event schema
+
 ```python
-from event_bus import EventBus, Consumer
+from multi_event_bus import EventBus, Consumer
 
 eb = EventBus()
 consumer = Consumer(eb)
@@ -54,7 +57,7 @@ consumer.subscribe_to("event-name")
 
 event = consumer.get()  # Blocking
 
-print(event.payload) # -> {"num": "7854"}
+print(event.payload)  # -> {"num": "7854"}
 ```
 
 ### Development

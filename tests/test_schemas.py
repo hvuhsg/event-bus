@@ -1,7 +1,10 @@
 import pytest
 
-from event_bus import EventBus
-from event_bus.exceptions import InvalidEventSchemaException, InvalidPayloadException
+from multi_event_bus import EventBus
+from multi_event_bus.exceptions import (
+    InvalidEventSchemaException,
+    InvalidPayloadException,
+)
 
 
 @pytest.fixture(scope="function")
