@@ -23,3 +23,10 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.poetry.scripts]
+test = 'scripts.poetry_scripts:run_all_tests'
+run_pytest = 'scripts.poetry_scripts:run_pytest'
+run_mypy = 'scripts.poetry_scripts:run_mypy'
+run_black = 'scripts.poetry_scripts:run_black'
+all = 'scripts.poetry_scripts:run_all'
