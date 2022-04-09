@@ -1,85 +1,44 @@
 import asyncio
-from datetime import timedelta, datetime
-
-import pytest
-
-from multi_event_bus import AsyncEventBus
-from multi_event_bus import AsyncConsumer
 
 
-@pytest.fixture(scope="function")
-def event_bus():
-    return AsyncEventBus()
+async def test_simple_pub_sub(async_event_bus, consumer_id, topic):
+    await async_event_bus.subscribe_to(consumer_id, topic, 0)
 
-
-@pytest.fixture(scope="function")
-def consumer(event_bus):
-    return AsyncConsumer(event_bus)
-
-
-async def test_simple_pub_sub(event_bus, consumer):
-    consumer.subscribe_to("user-registered")
-
-    dispatch_time = event_bus.dispatch(
-        "user-registered", payload={"id": 5, "username": "mosh", "age": 17}
+    dispatch_time = await async_event_bus.dispatch(
+        topic, payload={"id": 5, "username": "mosh", "age": 17}
     )
 
-    event = await consumer.get()
+    event, res_topic = await async_event_bus.get(consumer_id)
 
-    assert event.topic == "user-registered"
+    assert res_topic == topic
     assert event.dispatched_at == dispatch_time
     assert event.payload == {"id": 5, "username": "mosh", "age": 17}
 
 
-async def test_consume_with_offset(event_bus, consumer):
-    event_bus.dispatch(
-        "user-registered", payload={"id": 5, "username": "mosh", "age": 17}
+async def test_consume_with_offset(async_event_bus, consumer_id, topic):
+    await async_event_bus.dispatch(
+        topic, payload={"id": 5, "username": "mosh", "age": 17}
     )
-    event_bus.dispatch(
-        "user-registered", payload={"id": 6, "username": "josh", "age": 21}
+    await async_event_bus.dispatch(
+        topic, payload={"id": 6, "username": "josh", "age": 21}
     )
 
-    consumer.subscribe_to("user-registered", offset=1)
-    event = await consumer.get()
+    await async_event_bus.subscribe_to(consumer_id, topic, offset=1)
+    event, res_topic = await async_event_bus.get(consumer_id)
 
-    assert event.topic == "user-registered"
+    assert res_topic == topic
     assert event.payload == {"id": 6, "username": "josh", "age": 21}
 
 
-async def test_consume_from_date(event_bus, consumer):
-    event_bus.dispatch(
-        "user-registered", payload={"id": 5, "username": "mosh", "age": 17}
-    )
-    dispatch_time = event_bus.dispatch(
-        "user-registered", payload={"id": 6, "username": "josh", "age": 21}
-    )
+async def test_multi_lock(async_event_bus, consumer_id, topic):
+    async def call_dispatch():
+        await async_event_bus.dispatch(topic, payload={"a": 1})
 
-    consumer.subscribe_to("user-registered", from_date=dispatch_time)
-    event = await consumer.get()
+    loop = asyncio.get_event_loop()
+    loop.call_later(1, lambda: asyncio.ensure_future(call_dispatch()))
 
-    assert event.topic == "user-registered"
-    assert event.payload == {"id": 6, "username": "josh", "age": 21}
+    await async_event_bus.subscribe_to(consumer_id, topic, offset=0)
+    event, res_topic = await async_event_bus.get(consumer_id)
 
-
-async def test_consume_from_future_date(event_bus, consumer):
-    consumer.subscribe_to(
-        "user-registered", from_date=datetime.now() + timedelta(seconds=1)
-    )
-
-    event_bus.dispatch(
-        "user-registered", payload={"id": 6, "username": "josh", "age": 21}
-    )
-
-    async def dispatch_event():
-        await asyncio.sleep(1)
-        event_bus.dispatch(
-            "user-registered", payload={"id": 7, "username": "josh2", "age": 25}
-        )
-
-    asyncio.ensure_future(dispatch_event())
-
-    event = await consumer.get()
-
-    assert event is not None
-    assert event.topic == "user-registered"
-    assert event.payload == {"id": 7, "username": "josh2", "age": 25}
+    assert res_topic == topic
+    assert event.payload == {"a": 1}

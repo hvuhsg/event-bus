@@ -1,30 +1,41 @@
 from threading import Event as Locker
 from asyncio import Event as AsyncLocker
-from typing import Dict, List, Optional, Set, Union, Any
+from typing import Dict, List, Set, Union, Any, Tuple, Coroutine
 from collections import defaultdict
 from datetime import datetime
-from bisect import bisect_right
+import json
 
+import redis
+import aioredis
 import jsonschema
 
 from .event import Event
 from .exceptions import InvalidEventSchemaException
 from .exceptions import InvalidPayloadException
-from .consume_config import ConsumeConfig
 from .multi_lock import MultiLock, AsyncMultiLock
 
 
 class EventBus:
     LockerClass: type = Locker
     MultiLockClass: type = MultiLock
+    RedisClass: type = redis.Redis
 
-    def __init__(self):
+    def __init__(self, redis_host: str, redis_port: int):
         self.queues: Dict[str, List[Event]] = defaultdict(list)
         self.subscribe_queues: Set[str] = set()
         self.queues_schemas: Dict[str, dict] = {}
         self.queue_locks: Dict[str, Any] = defaultdict(self.LockerClass)
+        self._redis_conn = self.RedisClass(
+            host=redis_host, port=redis_port, socket_timeout=5
+        )
 
-    def register_event_schema(self, event_name, /, *, schema: dict):
+    def subscribe_to(
+        self, topic: str, consumer_id: str, offset: int
+    ) -> Union[bool, Coroutine]:
+        is_new_topic = self._redis_conn.hsetnx(consumer_id, topic, offset)
+        return bool(is_new_topic)
+
+    def register_event_schema(self, topic, /, *, schema: dict):
         try:
             jsonschema.validate({}, schema)
         except jsonschema.SchemaError as e:
@@ -32,126 +43,120 @@ class EventBus:
         except jsonschema.ValidationError:
             pass
 
-        self.queues_schemas[event_name] = schema
+        self._redis_conn.hset("schemas", topic, json.dumps(schema))
 
-    def dispatch(self, topic: str, /, *, payload: dict) -> datetime:
-        if schema := self.queues_schemas.get(topic):
+    def dispatch(self, topic: str, /, *, payload: dict) -> Union[datetime, Coroutine]:
+        schema_json = self._redis_conn.hget("schemas", topic)
+        if schema_json:
+            schema = json.loads(schema_json.decode())
             try:
                 jsonschema.validate(instance=payload, schema=schema)
             except jsonschema.ValidationError as e:
                 raise InvalidPayloadException() from e
 
         dispatch_time = datetime.now()
-        event = Event(topic=topic, payload=payload, dispatched_at=dispatch_time)
-        self.queues[topic].append(event)
+        event = Event(payload=payload, dispatched_at=dispatch_time)
+        self._redis_conn.lpush(topic, json.dumps(event.to_dict()))
 
         self.queue_locks[topic].set()
         del self.queue_locks[topic]
 
         return dispatch_time
 
-    def _get(
-        self, topics, topics_config: Dict[str, ConsumeConfig]
-    ) -> Union[Event, None]:
-        for topic in topics:
-            queue = self.queues[topic]
-            config = topics_config[topic]
+    def _get(self, consumer_id: str, consumer_config: dict):
+        for topic, offset in consumer_config.items():
+            offset = int(offset)
+            event = self._redis_conn.lindex(topic, (-offset) - 1)
 
-            if not queue:
-                continue
-
-            if config.offset is None and config.from_date is not None:
-                config.offset = self._calculate_offset_from_date(
-                    topic, config.from_date
-                )
-
-            if config.offset is None and config.from_date:
-                if queue[-1].dispatched_at >= config.from_date:
-                    config.offset = len(queue) - 1
-                    offset = config.offset
-                else:
-                    continue
-            elif config.offset is not None:
-                offset = config.offset
+            if event is not None:
+                self._redis_conn.hincrby(consumer_id, topic, 1)
             else:
                 continue
 
-            if len(queue) <= offset:
-                continue
+            return Event.from_dict(json.loads(event.decode())), topic.decode()
 
-            config.offset += 1
+        return None, None
 
-            return queue[offset]
+    def get(self, consumer_id: str) -> Union[Tuple[Event, str], Coroutine]:
+        consumer_config = self._redis_conn.hgetall(consumer_id)
+        event, topic = self._get(consumer_id, consumer_config)
 
-        return None
+        if event is not None and topic is not None:
+            return event, topic
 
-    def get(self, topics, topics_config: Dict[str, ConsumeConfig]):
-        if (event := self._get(topics, topics_config)) is not None:
-            return event
-
-        locks = [self.queue_locks[topic] for topic in topics]
+        locks = [
+            self.queue_locks[topic.decode()] for topic in list(consumer_config.keys())
+        ]
         or_event = MultiLock(*locks)
         or_event.wait()
 
-        return self.get(topics, topics_config)
-
-    def _calculate_offset_from_date(
-        self, topic: str, /, from_date: datetime
-    ) -> Optional[int]:
-        queue = self.queues[topic]
-        i = bisect_right(queue, from_date)
-
-        if i == len(queue):
-            return None
-
-        return i
+        return self.get(consumer_id)
 
 
 class AsyncEventBus(EventBus):
     LockerClass = AsyncLocker
     MultiLockClass = AsyncMultiLock
+    RedisClass = aioredis.Redis
 
-    def _get(
-        self, topics, topics_config: Dict[str, ConsumeConfig]
-    ) -> Union[Event, None]:
-        for topic in topics:
-            queue = self.queues[topic]
-            config = topics_config[topic]
+    async def subscribe_to(self, topic: str, consumer_id: str, offset: int):
+        is_new_topic = await self._redis_conn.hsetnx(consumer_id, topic, offset)
+        return bool(is_new_topic)
 
-            if not queue:
-                continue
+    async def register_event_schema(self, topic, /, *, schema: dict):
+        try:
+            jsonschema.validate({}, schema)
+        except jsonschema.SchemaError as e:
+            raise InvalidEventSchemaException() from e
+        except jsonschema.ValidationError:
+            pass
 
-            if config.offset is None and config.from_date is not None:
-                config.offset = self._calculate_offset_from_date(
-                    topic, config.from_date
-                )
+        await self._redis_conn.hset("schemas", topic, json.dumps(schema))
 
-            if config.offset is None and config.from_date:
-                if queue[-1].dispatched_at >= config.from_date:
-                    config.offset = len(queue) - 1
-                    offset = config.offset
-                else:
-                    continue
-            elif config.offset is not None:
-                offset = config.offset
+    async def dispatch(self, topic: str, /, *, payload: dict) -> datetime:
+        schema_json = await self._redis_conn.hget("schemas", topic)
+        if schema_json:
+            schema = json.loads(schema_json.decode())
+            try:
+                jsonschema.validate(instance=payload, schema=schema)
+            except jsonschema.ValidationError as e:
+                raise InvalidPayloadException() from e
+
+        dispatch_time = datetime.now()
+        event = Event(payload=payload, dispatched_at=dispatch_time)
+        await self._redis_conn.lpush(topic, json.dumps(event.to_dict()))
+
+        self.queue_locks[topic].set()
+        del self.queue_locks[topic]
+
+        return dispatch_time
+
+    async def _get(
+        self, consumer_id: str, consumer_config: dict
+    ) -> Union[Tuple[Event, str], Tuple[None, None]]:
+        for topic, offset in consumer_config.items():
+            offset = int(offset)
+            event = await self._redis_conn.lindex(topic, (-offset) - 1)
+
+            if event is not None:
+                await self._redis_conn.hincrby(consumer_id, topic, 1)
             else:
                 continue
 
-            if len(queue) <= offset:
-                continue
+            return Event.from_dict(json.loads(event.decode())), topic.decode()
 
-            config.offset += 1
+        return None, None
 
-            return queue[offset]
+    async def get(self, consumer_id: str):
+        consumer_config = await self._redis_conn.hgetall(consumer_id)
+        event, topic = await self._get(consumer_id, consumer_config)
+        if event:
+            return event, topic
 
-        return None
+        locks = [
+            self.queue_locks[topic.decode()] for topic in list(consumer_config.keys())
+        ]
+        or_event = self.MultiLockClass(*locks)
 
-    async def get(self, topics, topics_config: Dict[str, ConsumeConfig]):
-        if (event := self._get(topics, topics_config)) is not None:
-            return event
-
-        locks = [self.queue_locks[topic] for topic in topics]
-        or_event = AsyncMultiLock(*locks)
         await or_event.wait()
 
-        return await self.get(topics, topics_config)
+        return await self.get(consumer_id)

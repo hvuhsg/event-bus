@@ -7,42 +7,39 @@ EventBus implementation in python
 #### sync
 
 ```python
-from multi_event_bus import EventBus, Consumer
+from multi_event_bus import EventBus
 
-eb = EventBus()
-consumer = Consumer(eb)
+eb = EventBus(redis_host="127.0.0.1", redis_port=6379)
 
 eb.dispatch("event-name", payload={"num": 1})
 
-consumer.subscribe_to("event-name")
+eb.subscribe_to("event-name", consumer_id="consumer-1", offset=0)
 
-event = consumer.get()  # Blocking
+event, topic = eb.get(consumer_id="consumer-1")  # Blocking
 
 print(event.payload)  # -> {"num": 1}
 ```
 #### async
 
 ```python
-from multi_event_bus import AsyncEventBus, AsyncConsumer
+from multi_event_bus import AsyncEventBus
 
-eb = AsyncEventBus()
-consumer = AsyncConsumer(eb)
+eb = AsyncEventBus(redis_host="127.0.0.1", redis_port=6379)
 
 eb.dispatch("event-name", payload={"num": 1})
 
-consumer.subscribe_to("event-name")
+eb.subscribe_to("event-name", consumer_id="consumer-2", offset=0)
 
-event = await consumer.get()
+event, topic = await eb.get(consumer_id="consumer-2")
 
 print(event.payload)  # -> {"num": 1}
 ```
 #### register event schema
 
 ```python
-from multi_event_bus import EventBus, Consumer
+from multi_event_bus import EventBus
 
-eb = EventBus()
-consumer = Consumer(eb)
+eb = EventBus(redis_host="127.0.0.1", redis_port=6379)
 
 # Enforce json schema of event
 json_schema = {
@@ -53,9 +50,9 @@ eb.register_event_schema("event-name", schema=json_schema)
 
 eb.dispatch("event-name", payload={"num": "7854"})
 
-consumer.subscribe_to("event-name")
+eb.subscribe_to("event-name", consumer_id="consumer-3", offset=0)
 
-event = consumer.get()  # Blocking
+event, topic = eb.get(consumer_id="consumer-3")  # Blocking
 
 print(event.payload)  # -> {"num": "7854"}
 ```

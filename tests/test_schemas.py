@@ -1,15 +1,9 @@
 import pytest
 
-from multi_event_bus import EventBus
 from multi_event_bus.exceptions import (
     InvalidEventSchemaException,
     InvalidPayloadException,
 )
-
-
-@pytest.fixture(scope="function")
-def event_bus():
-    return EventBus()
 
 
 def test_schema_registering(event_bus):
