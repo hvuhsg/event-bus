@@ -2,7 +2,7 @@ import asyncio
 
 
 async def test_simple_pub_sub(async_event_bus, consumer_id, topic):
-    await async_event_bus.subscribe_to(consumer_id, topic, 0)
+    await async_event_bus.subscribe_to(topic, consumer_id, 0)
 
     dispatch_time = await async_event_bus.dispatch(
         topic, payload={"id": 5, "username": "mosh", "age": 17}
@@ -23,7 +23,7 @@ async def test_consume_with_offset(async_event_bus, consumer_id, topic):
         topic, payload={"id": 6, "username": "josh", "age": 21}
     )
 
-    await async_event_bus.subscribe_to(consumer_id, topic, offset=1)
+    await async_event_bus.subscribe_to(topic, consumer_id, offset=1)
     event, res_topic = await async_event_bus.get(consumer_id)
 
     assert res_topic == topic
@@ -37,7 +37,7 @@ async def test_multi_lock(async_event_bus, consumer_id, topic):
     loop = asyncio.get_event_loop()
     loop.call_later(1, lambda: asyncio.ensure_future(call_dispatch()))
 
-    await async_event_bus.subscribe_to(consumer_id, topic, offset=0)
+    await async_event_bus.subscribe_to(topic, consumer_id, offset=0)
     event, res_topic = await async_event_bus.get(consumer_id)
 
     assert res_topic == topic
