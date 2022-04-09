@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "multi_event_bus"
-version = "0.1.1"
+version = "0.2.0"
 description = "event bus implementation in python with sync and async support"
 authors = ["yehoyada <hvuhsg5@gmail.com>"]
 readme = "README.md"
