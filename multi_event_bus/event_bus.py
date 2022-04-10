@@ -13,16 +13,12 @@ from .multi_lock import MultiLock
 
 
 class EventBus:
-    LockerClass: type = Locker
-    MultiLockClass: type = MultiLock
-    RedisClass: type = redis.Redis
-
     def __init__(self, redis_host: str, redis_port: int):
         self.queues: Dict[str, List[Event]] = defaultdict(list)
         self.subscribe_queues: Set[str] = set()
         self.queues_schemas: Dict[str, dict] = {}
-        self.queue_locks: Dict[str, Any] = defaultdict(self.LockerClass)
-        self._redis_conn = self.RedisClass(
+        self.queue_locks: Dict[str, Any] = defaultdict(Locker)
+        self._redis_conn = redis.Redis(
             host=redis_host, port=redis_port, socket_timeout=5
         )
 

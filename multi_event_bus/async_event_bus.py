@@ -13,16 +13,12 @@ from .multi_lock import AsyncMultiLock
 
 
 class AsyncEventBus:
-    LockerClass = AsyncLocker
-    MultiLockClass = AsyncMultiLock
-    RedisClass = aioredis.Redis
-
     def __init__(self, redis_host: str, redis_port: int):
         self.queues: Dict[str, List[Event]] = defaultdict(list)
         self.subscribe_queues: Set[str] = set()
         self.queues_schemas: Dict[str, dict] = {}
-        self.queue_locks: Dict[str, Any] = defaultdict(self.LockerClass)
-        self._redis_conn = self.RedisClass(
+        self.queue_locks: Dict[str, Any] = defaultdict(AsyncLocker)
+        self._redis_conn = aioredis.Redis(
             host=redis_host, port=redis_port, socket_timeout=5
         )
 
@@ -83,7 +79,7 @@ class AsyncEventBus:
         locks = [
             self.queue_locks[topic.decode()] for topic in list(consumer_config.keys())
         ]
-        or_event = self.MultiLockClass(*locks)
+        or_event = AsyncMultiLock(*locks)
 
         await or_event.wait()
 
