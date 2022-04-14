@@ -30,9 +30,9 @@ jobs:
         poetry install
     - name: Test with pytest
       run: |
-        docker-compose up -d
+        docker-compose -f ./tests/docker-compose.yml up -d
         poetry run pytest .
-        docker-compose down
+        docker-compose -f ./tests/docker-compose.yml down
     - name: Lint
       run: |
         poetry run flake8 multi_event_bus --max-line-length=120
